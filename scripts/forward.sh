@@ -1,0 +1,37 @@
+#!/usr/bin/env sh
+set -eu
+
+MIZUKURA_NAMESPACE=${MIZUKURA_NAMESPACE:-mizukura}
+MIZUKURA_RELEASE=${MIZUKURA_RELEASE:-rustfs}
+MIZUKURA_SERVICE=${MIZUKURA_SERVICE:-$MIZUKURA_RELEASE-svc}
+MIZUKURA_API_PORT=${MIZUKURA_API_PORT:-9000}
+MIZUKURA_CONSOLE_PORT=${MIZUKURA_CONSOLE_PORT:-9001}
+
+MIZUKAGAMI_NAMESPACE=${MIZUKAGAMI_NAMESPACE:-mizukagami}
+MIZUKAGAMI_SERVICE=${MIZUKAGAMI_SERVICE:-mizukagami}
+MIZUKAGAMI_LOCAL_PORT=${MIZUKAGAMI_LOCAL_PORT:-3000}
+MIZUKAGAMI_SERVICE_PORT=${MIZUKAGAMI_SERVICE_PORT:-80}
+
+pids=""
+
+cleanup() {
+  for pid in $pids; do
+    kill "$pid" >/dev/null 2>&1 || true
+  done
+}
+
+trap cleanup INT TERM EXIT
+
+echo "Forwarding mizukura API:      localhost:$MIZUKURA_API_PORT -> svc/$MIZUKURA_SERVICE:9000"
+echo "Forwarding mizukura console:  localhost:$MIZUKURA_CONSOLE_PORT -> svc/$MIZUKURA_SERVICE:9001"
+kubectl -n "$MIZUKURA_NAMESPACE" port-forward "svc/$MIZUKURA_SERVICE" \
+  "$MIZUKURA_API_PORT:9000" \
+  "$MIZUKURA_CONSOLE_PORT:9001" &
+pids="$pids $!"
+
+echo "Forwarding mizukagami:        localhost:$MIZUKAGAMI_LOCAL_PORT -> svc/$MIZUKAGAMI_SERVICE:$MIZUKAGAMI_SERVICE_PORT"
+kubectl -n "$MIZUKAGAMI_NAMESPACE" port-forward "svc/$MIZUKAGAMI_SERVICE" \
+  "$MIZUKAGAMI_LOCAL_PORT:$MIZUKAGAMI_SERVICE_PORT" &
+pids="$pids $!"
+
+wait
