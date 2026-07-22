@@ -17,6 +17,32 @@ spec:
     spec:
       securityContext:
         fsGroup: 65532
+      initContainers:
+        - name: create-rustfs-bucket
+          image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+          env:
+            - name: RUSTFS_ENDPOINT
+              value: http://rustfs-svc.mizukura.svc.cluster.local:9000
+            - name: RUSTFS_BUCKET
+              value: mizukagami
+            - name: RUSTFS_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: rustfs-auth
+                  key: RUSTFS_ACCESS_KEY
+            - name: RUSTFS_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: rustfs-auth
+                  key: RUSTFS_SECRET_KEY
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              until mc alias set rustfs "$RUSTFS_ENDPOINT" "$RUSTFS_ACCESS_KEY" "$RUSTFS_SECRET_KEY"; do
+                sleep 2
+              done
+              mc mb --ignore-existing "rustfs/$RUSTFS_BUCKET"
       containers:
         - name: mizukagami
           image: mizukagami:latest
@@ -31,6 +57,45 @@ spec:
               value: /var/lib/mizukagami/tessera
             - name: MIZUKAGAMI_SIGNER_KEY_FILE
               value: /var/lib/mizukagami/tessera/.state/signer.key
+            - name: MIZUKAGAMI_STORAGE_BACKEND
+              value: aws-s3
+            - name: MIZUKAGAMI_AWS_S3_ENDPOINT
+              value: http://rustfs-svc.mizukura.svc.cluster.local:9000
+            - name: MIZUKAGAMI_AWS_S3_BUCKET
+              value: mizukagami
+            - name: MIZUKAGAMI_AWS_S3_REGION
+              value: us-east-1
+            - name: MIZUKAGAMI_AWS_S3_USE_PATH_STYLE
+              value: "true"
+            - name: MIZUKAGAMI_AWS_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: rustfs-auth
+                  key: RUSTFS_ACCESS_KEY
+            - name: MIZUKAGAMI_AWS_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: rustfs-auth
+                  key: RUSTFS_SECRET_KEY
+            - name: MIZUKAGAMI_AWS_MYSQL_HOST
+              value: mysql.mizukagami.svc.cluster.local
+            - name: MIZUKAGAMI_AWS_MYSQL_PORT
+              value: "3306"
+            - name: MIZUKAGAMI_AWS_MYSQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: mizukagami-mysql
+                  key: MYSQL_DATABASE
+            - name: MIZUKAGAMI_AWS_MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mizukagami-mysql
+                  key: MYSQL_USER
+            - name: MIZUKAGAMI_AWS_MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mizukagami-mysql
+                  key: MYSQL_PASSWORD
           volumeMounts:
             - name: data
               mountPath: /var/lib/mizukagami

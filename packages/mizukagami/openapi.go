@@ -281,8 +281,13 @@ const openAPISpec = `{
       },
       "TesseraStatus": {
         "type": "object",
-        "required": ["log_dir", "signer", "verifier_key", "next_index", "integrated_size"],
+        "required": ["storage_backend", "log_dir", "signer", "verifier_key", "next_index", "integrated_size"],
         "properties": {
+          "storage_backend": {
+            "type": "string",
+            "enum": ["posix", "aws-s3"],
+            "example": "posix"
+          },
           "log_dir": {
             "type": "string",
             "example": ".data/tessera"

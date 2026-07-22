@@ -31,14 +31,21 @@ already exist:
 
 ```text
 RUSTFS_ACCESS_KEY=admin
-RUSTFS_SECRET_KEY=admin
+RUSTFS_SECRET_KEY=adminadmin
 ```
+
+The secret key is at least eight characters so common S3 clients such as
+`mc` accept it.
 
 To provide credentials explicitly:
 
 ```sh
 RUSTFS_ACCESS_KEY=... RUSTFS_SECRET_KEY=... scripts/install.sh
 ```
+
+The install script does not overwrite an existing `secret/rustfs-auth`. If you
+installed an older default, update both RustFS and any client namespace secrets
+to the same value.
 
 ## Access
 

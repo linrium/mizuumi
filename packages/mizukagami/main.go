@@ -9,12 +9,18 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
+	"strconv"
 	"syscall"
 	"time"
 
+	awssdk "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/go-sql-driver/mysql"
 	"github.com/gofiber/fiber/v3"
 	"github.com/transparency-dev/tessera"
+	"github.com/transparency-dev/tessera/api/layout"
+	tesseraaws "github.com/transparency-dev/tessera/storage/aws"
 	"github.com/transparency-dev/tessera/storage/posix"
 	"github.com/yokeTH/gofiber-scalar/scalar/v3"
 	"golang.org/x/mod/sumdb/note"
@@ -37,9 +43,9 @@ func main() {
 		log.Fatalf("load signer: %v", err)
 	}
 
-	driver, err := posix.New(ctx, posix.Config{Path: cfg.logDir})
+	driver, err := newStorageDriver(ctx, cfg)
 	if err != nil {
-		log.Fatalf("create Tessera POSIX driver: %v", err)
+		log.Fatalf("create Tessera storage driver: %v", err)
 	}
 
 	appender, shutdown, reader, err := tessera.NewAppender(ctx, driver, tessera.NewAppendOptions().
@@ -86,6 +92,7 @@ func main() {
 		}
 
 		return c.JSON(fiber.Map{
+			"storage_backend": cfg.storageBackend,
 			"log_dir":         cfg.logDir,
 			"signer":          signer.Name(),
 			"verifier_key":    verifierKey,
@@ -125,11 +132,14 @@ func main() {
 		return c.Send(checkpoint)
 	})
 
-	app.Get("/tile/*", func(c fiber.Ctx) error {
-		return sendLogFile(c, cfg.logDir, "tile", c.Params("*"))
+	app.Get("/tile/entries/*", func(c fiber.Ctx) error {
+		return sendEntryBundle(c, reader, c.Params("*"))
 	})
 	app.Get("/entries/*", func(c fiber.Ctx) error {
-		return sendLogFile(c, cfg.logDir, filepath.Join("tile", "entries"), c.Params("*"))
+		return sendEntryBundle(c, reader, c.Params("*"))
+	})
+	app.Get("/tile/*", func(c fiber.Ctx) error {
+		return sendTile(c, reader, c.Params("*"))
 	})
 
 	go func() {
@@ -145,18 +155,104 @@ func main() {
 }
 
 type config struct {
-	listenAddr    string
-	logDir        string
-	signerKeyFile string
+	listenAddr       string
+	logDir           string
+	signerKeyFile    string
+	storageBackend   string
+	s3Endpoint       string
+	s3Bucket         string
+	s3BucketPrefix   string
+	s3AccessKey      string
+	s3SecretKey      string
+	s3Region         string
+	s3UsePathStyle   bool
+	mysqlDSN         string
+	mysqlHost        string
+	mysqlPort        string
+	mysqlDatabase    string
+	mysqlUser        string
+	mysqlPassword    string
+	mysqlMaxOpenConn int
+	mysqlMaxIdleConn int
 }
 
 func loadConfig() config {
 	logDir := getenv("MIZUKAGAMI_LOG_DIR", ".data/tessera")
 	return config{
-		listenAddr:    getenv("MIZUKAGAMI_ADDR", ":3000"),
-		logDir:        logDir,
-		signerKeyFile: getenv("MIZUKAGAMI_SIGNER_KEY_FILE", filepath.Join(logDir, ".state", "signer.key")),
+		listenAddr:       getenv("MIZUKAGAMI_ADDR", ":3000"),
+		logDir:           logDir,
+		signerKeyFile:    getenv("MIZUKAGAMI_SIGNER_KEY_FILE", filepath.Join(logDir, ".state", "signer.key")),
+		storageBackend:   getenv("MIZUKAGAMI_STORAGE_BACKEND", "posix"),
+		s3Endpoint:       os.Getenv("MIZUKAGAMI_AWS_S3_ENDPOINT"),
+		s3Bucket:         os.Getenv("MIZUKAGAMI_AWS_S3_BUCKET"),
+		s3BucketPrefix:   os.Getenv("MIZUKAGAMI_AWS_S3_BUCKET_PREFIX"),
+		s3AccessKey:      os.Getenv("MIZUKAGAMI_AWS_S3_ACCESS_KEY"),
+		s3SecretKey:      os.Getenv("MIZUKAGAMI_AWS_S3_SECRET_KEY"),
+		s3Region:         getenv("MIZUKAGAMI_AWS_S3_REGION", "us-east-1"),
+		s3UsePathStyle:   getenvBool("MIZUKAGAMI_AWS_S3_USE_PATH_STYLE", true),
+		mysqlDSN:         os.Getenv("MIZUKAGAMI_AWS_MYSQL_DSN"),
+		mysqlHost:        getenv("MIZUKAGAMI_AWS_MYSQL_HOST", "mysql"),
+		mysqlPort:        getenv("MIZUKAGAMI_AWS_MYSQL_PORT", "3306"),
+		mysqlDatabase:    getenv("MIZUKAGAMI_AWS_MYSQL_DATABASE", "tessera"),
+		mysqlUser:        os.Getenv("MIZUKAGAMI_AWS_MYSQL_USER"),
+		mysqlPassword:    os.Getenv("MIZUKAGAMI_AWS_MYSQL_PASSWORD"),
+		mysqlMaxOpenConn: getenvInt("MIZUKAGAMI_AWS_MYSQL_MAX_OPEN_CONNS", 0),
+		mysqlMaxIdleConn: getenvInt("MIZUKAGAMI_AWS_MYSQL_MAX_IDLE_CONNS", 2),
 	}
+}
+
+func newStorageDriver(ctx context.Context, cfg config) (tessera.Driver, error) {
+	switch cfg.storageBackend {
+	case "posix":
+		return posix.New(ctx, posix.Config{Path: cfg.logDir})
+	case "aws-s3":
+		if cfg.s3Bucket == "" {
+			return nil, errors.New("MIZUKAGAMI_AWS_S3_BUCKET is required for aws-s3 storage")
+		}
+
+		s3Opts := func(o *s3.Options) {
+			o.Region = cfg.s3Region
+			o.UsePathStyle = cfg.s3UsePathStyle
+			if cfg.s3Endpoint != "" {
+				o.BaseEndpoint = awssdk.String(cfg.s3Endpoint)
+			}
+			if cfg.s3AccessKey != "" || cfg.s3SecretKey != "" {
+				o.Credentials = credentials.NewStaticCredentialsProvider(cfg.s3AccessKey, cfg.s3SecretKey, "")
+			}
+		}
+
+		return tesseraaws.New(ctx, tesseraaws.Config{
+			SDKConfig: &awssdk.Config{
+				Region: cfg.s3Region,
+			},
+			S3Options:    s3Opts,
+			Bucket:       cfg.s3Bucket,
+			BucketPrefix: cfg.s3BucketPrefix,
+			DSN:          mysqlDSN(cfg),
+			MaxOpenConns: cfg.mysqlMaxOpenConn,
+			MaxIdleConns: cfg.mysqlMaxIdleConn,
+		})
+	default:
+		return nil, fmt.Errorf("unsupported MIZUKAGAMI_STORAGE_BACKEND %q", cfg.storageBackend)
+	}
+}
+
+func mysqlDSN(cfg config) string {
+	if cfg.mysqlDSN != "" {
+		return cfg.mysqlDSN
+	}
+
+	mysqlCfg := mysql.Config{
+		User:                    cfg.mysqlUser,
+		Passwd:                  cfg.mysqlPassword,
+		Net:                     "tcp",
+		Addr:                    cfg.mysqlHost + ":" + cfg.mysqlPort,
+		DBName:                  cfg.mysqlDatabase,
+		AllowCleartextPasswords: true,
+		AllowNativePasswords:    true,
+		ParseTime:               true,
+	}
+	return mysqlCfg.FormatDSN()
 }
 
 func loadOrCreateSigner(path string) (note.Signer, string, error) {
@@ -192,21 +288,18 @@ func loadOrCreateSigner(path string) (note.Signer, string, error) {
 	return signer, verifierKey, err
 }
 
-func sendLogFile(c fiber.Ctx, root, prefix, requested string) error {
-	cleaned := filepath.Clean(filepath.Join(prefix, requested))
-	if cleaned == "." || cleaned == prefix || !strings.HasPrefix(cleaned, prefix+string(filepath.Separator)) {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid log path")
+func sendTile(c fiber.Ctx, reader tessera.LogReader, requested string) error {
+	level, index, p, err := layout.ParseTileLevelIndexPartial(nextPathSegment(requested), trimFirstPathSegment(requested))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 
-	path := filepath.Join(root, cleaned)
-	if _, err := os.Stat(path); err != nil {
-		status := fiber.StatusInternalServerError
-		if errors.Is(err, os.ErrNotExist) {
-			status = fiber.StatusNotFound
-		}
-		return fiber.NewError(status, err.Error())
+	tile, err := reader.ReadTile(c.Context(), level, index, p)
+	if err != nil {
+		return logResourceError(err)
 	}
-	return c.SendFile(path)
+	c.Set("Cache-Control", "public, max-age=31536000, immutable")
+	return c.Send(tile)
 }
 
 func getenv(key, fallback string) string {
@@ -214,4 +307,68 @@ func getenv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func sendEntryBundle(c fiber.Ctx, reader tessera.LogReader, requested string) error {
+	index, p, err := layout.ParseTileIndexPartial(requested)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+
+	entryBundle, err := reader.ReadEntryBundle(c.Context(), index, p)
+	if err != nil {
+		return logResourceError(err)
+	}
+	c.Set("Cache-Control", "public, max-age=31536000, immutable")
+	return c.Send(entryBundle)
+}
+
+func logResourceError(err error) error {
+	status := fiber.StatusInternalServerError
+	if errors.Is(err, os.ErrNotExist) {
+		status = fiber.StatusNotFound
+	}
+	return fiber.NewError(status, err.Error())
+}
+
+func nextPathSegment(path string) string {
+	for i, r := range path {
+		if r == '/' {
+			return path[:i]
+		}
+	}
+	return path
+}
+
+func trimFirstPathSegment(path string) string {
+	for i, r := range path {
+		if r == '/' {
+			return path[i+1:]
+		}
+	}
+	return ""
+}
+
+func getenvBool(key string, fallback bool) bool {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		log.Fatalf("parse %s: %v", key, err)
+	}
+	return parsed
+}
+
+func getenvInt(key string, fallback int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		log.Fatalf("parse %s: %v", key, err)
+	}
+	return parsed
 }

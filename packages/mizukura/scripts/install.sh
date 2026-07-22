@@ -14,7 +14,7 @@ kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -
 
 if ! kubectl -n "$NAMESPACE" get secret "$SECRET_NAME" >/dev/null 2>&1; then
   access_key=${RUSTFS_ACCESS_KEY:-admin}
-  secret_key=${RUSTFS_SECRET_KEY:-admin}
+  secret_key=${RUSTFS_SECRET_KEY:-adminadmin}
 
   kubectl -n "$NAMESPACE" create secret generic "$SECRET_NAME" \
     --from-literal=RUSTFS_ACCESS_KEY="$access_key" \

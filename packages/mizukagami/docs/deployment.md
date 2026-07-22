@@ -1,6 +1,9 @@
 # Deployment
 
-Mizukagami includes a Dockerfile and Kubernetes manifests for a single-replica deployment with persistent Tessera POSIX storage.
+Mizukagami includes a Dockerfile and Kubernetes manifests for a single-replica
+deployment. Local containers use Tessera POSIX storage by default. The
+Kubernetes manifests use Tessera's AWS/S3 backend with RustFS in the
+`mizukura` namespace and MySQL in the `mizukagami` namespace.
 
 ## Build the Image
 
@@ -33,9 +36,21 @@ The manifests live in `k8s/` and include:
 ```text
 namespace.yaml
 persistent-volume-claim.yaml
+rustfs-secret.yaml
+mysql-secret.yaml
+mysql-persistent-volume-claim.yaml
+mysql-service.yaml
+mysql-deployment.yaml
 deployment.yaml
 service.yaml
 kustomization.yaml
+```
+
+Install RustFS first:
+
+```sh
+cd ../mizukura
+scripts/install.sh
 ```
 
 Apply them from `packages/mizukagami`:
@@ -43,6 +58,20 @@ Apply them from `packages/mizukagami`:
 ```sh
 kubectl apply -k k8s
 ```
+
+The Mizukagami Deployment reaches RustFS through Kubernetes DNS:
+
+```text
+http://rustfs-svc.mizukura.svc.cluster.local:9000
+```
+
+Kubernetes secrets are namespace-scoped, so `k8s/rustfs-secret.yaml` mirrors the
+default RustFS credentials into the `mizukagami` namespace. If you install
+RustFS with non-default credentials, update both the `mizukura/rustfs-auth`
+secret and the `mizukagami/rustfs-auth` secret.
+
+The default mirrored credentials are `admin/adminadmin`. The secret key is at
+least eight characters so common S3 clients such as `mc` accept it.
 
 For Docker Desktop Kubernetes, use the local deploy script:
 
@@ -86,11 +115,15 @@ The Deployment mounts a `PersistentVolumeClaim` at:
 /var/lib/mizukagami
 ```
 
-Tessera data and the checkpoint signer key are stored under:
+The checkpoint signer key is stored under:
 
 ```text
-/var/lib/mizukagami/tessera
 /var/lib/mizukagami/tessera/.state/signer.key
 ```
 
-Keep this volume when restarting or upgrading the deployment. Deleting the signer key while keeping old log data changes the checkpoint signing identity.
+Tessera log resources are stored in the RustFS bucket named `mizukagami`.
+Tessera sequencing state is stored in the `mizukagami-mysql` MySQL PVC.
+
+Keep the signer key, RustFS bucket, and MySQL PVC together when restarting or
+upgrading the deployment. Deleting the signer key while keeping old log data
+changes the checkpoint signing identity.

@@ -4,7 +4,7 @@ set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 APP_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 
-IMAGE_NAME=${IMAGE_NAME:-mizukagami:latest}
+IMAGE_NAME=${IMAGE_NAME:-mizukagami:local-$(date +%Y%m%d%H%M%S)}
 CONTEXT=${KUBE_CONTEXT:-docker-desktop}
 NAMESPACE=${NAMESPACE:-mizukagami}
 
@@ -20,6 +20,9 @@ docker build -t "$IMAGE_NAME" "$APP_DIR"
 
 echo "Applying Kubernetes manifests to context $CONTEXT"
 kubectl apply -k "$APP_DIR/k8s"
+
+echo "Updating deployment image to $IMAGE_NAME"
+kubectl -n "$NAMESPACE" set image deployment/mizukagami mizukagami="$IMAGE_NAME"
 
 echo "Waiting for rollout"
 kubectl -n "$NAMESPACE" rollout status deployment/mizukagami
