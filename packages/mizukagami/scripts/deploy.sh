@@ -1,0 +1,28 @@
+#!/usr/bin/env sh
+set -eu
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+APP_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+
+IMAGE_NAME=${IMAGE_NAME:-mizukagami:latest}
+CONTEXT=${KUBE_CONTEXT:-docker-desktop}
+NAMESPACE=${NAMESPACE:-mizukagami}
+
+current_context=$(kubectl config current-context)
+if [ "$current_context" != "$CONTEXT" ]; then
+  echo "Refusing to deploy to Kubernetes context '$current_context'."
+  echo "Set KUBE_CONTEXT=$current_context to deploy there, or switch to '$CONTEXT'."
+  exit 1
+fi
+
+echo "Building $IMAGE_NAME"
+docker build -t "$IMAGE_NAME" "$APP_DIR"
+
+echo "Applying Kubernetes manifests to context $CONTEXT"
+kubectl apply -k "$APP_DIR/k8s"
+
+echo "Waiting for rollout"
+kubectl -n "$NAMESPACE" rollout status deployment/mizukagami
+
+echo "Deployment ready."
+echo "Run: kubectl -n $NAMESPACE port-forward svc/mizukagami 3000:80"

@@ -39,6 +39,26 @@ MIZUKAGAMI_LOG_DIR          Tessera POSIX log directory, default .data/tessera
 MIZUKAGAMI_SIGNER_KEY_FILE  checkpoint signer key file, default .data/tessera/.state/signer.key
 ```
 
+## Container
+
+```sh
+docker build -t mizukagami:latest .
+docker run --rm -p 3000:3000 -v mizukagami-data:/var/lib/mizukagami mizukagami:latest
+```
+
+## Kubernetes
+
+```sh
+kubectl apply -k k8s
+kubectl -n mizukagami port-forward svc/mizukagami 3000:80
+```
+
+For Docker Desktop Kubernetes:
+
+```sh
+scripts/deploy-local-docker-desktop.sh
+```
+
 See [docs/tessera.md](docs/tessera.md) for usage examples.
 
 See [docs/openapi.md](docs/openapi.md) for the OpenAPI and Scalar integration.
