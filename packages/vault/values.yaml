@@ -1,0 +1,73 @@
+# HashiCorp Vault Helm values for a one-node Kubernetes deployment.
+#
+# This package intentionally uses standalone mode for local/small-cluster use.
+# Review HashiCorp's production checklist before using Vault for production data.
+global:
+  enabled: true
+  tlsDisable: true
+
+injector:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+server:
+  enabled: true
+  image:
+    repository: hashicorp/vault
+    tag: 2.0.3
+    pullPolicy: IfNotPresent
+
+  updateStrategyType: RollingUpdate
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+  service:
+    enabled: true
+    type: ClusterIP
+    port: 8200
+    targetPort: 8200
+
+  dataStorage:
+    enabled: true
+    size: 10Gi
+    storageClass: standard
+    accessMode: ReadWriteOnce
+
+  auditStorage:
+    enabled: false
+
+  standalone:
+    enabled: true
+    config: |
+      ui = true
+
+      listener "tcp" {
+        tls_disable = 1
+        address = "0.0.0.0:8200"
+        cluster_address = "0.0.0.0:8201"
+      }
+
+      storage "file" {
+        path = "/vault/data"
+      }
+
+  ha:
+    enabled: false
+
+ui:
+  enabled: true
+  serviceType: ClusterIP
+  externalPort: 8200

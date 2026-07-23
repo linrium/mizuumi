@@ -67,7 +67,7 @@ func main() {
 	app := fiber.New()
 
 	app.Get("/docs/*", scalar.New(scalar.Config{
-		FileContentString: openAPISpec,
+		FileContentString: openAPISpec(),
 		Path:              "/docs",
 		Title:             "Mizukagami API",
 		Theme:             scalar.ThemeDefault,

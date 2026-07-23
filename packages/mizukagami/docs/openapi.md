@@ -24,17 +24,17 @@ curl http://localhost:3000/docs/doc.json
 
 ## Implementation
 
-The OpenAPI document is embedded in `openapi.go` as `openAPISpec`.
+The OpenAPI document is generated from typed metadata in `openapi.go`.
 
 Scalar is mounted in `main.go`:
 
 ```go
 app.Get("/docs/*", scalar.New(scalar.Config{
-	FileContentString: openAPISpec,
+	FileContentString: openAPISpec(),
 	Path:              "/docs",
 	Title:             "Mizukagami API",
 	Theme:             scalar.ThemeDefault,
 }))
 ```
 
-Update `openapi.go` whenever routes, request bodies, or response bodies change.
+Update the OpenAPI metadata builder whenever routes, request bodies, or response bodies change.
