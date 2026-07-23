@@ -53,6 +53,7 @@ kubectl -n "$KEYCLOAK_NAMESPACE" create secret tls keycloak-tls \
   --dry-run=client \
   -o yaml | kubectl apply -f -
 
+kubectl -n "$KEYCLOAK_NAMESPACE" apply -f "$APP_DIR/manifests/admin.yaml"
 kubectl -n "$KEYCLOAK_NAMESPACE" apply -f "$APP_DIR/manifests/postgres.yaml"
 
 kubectl -n "$KEYCLOAK_NAMESPACE" wait \
@@ -73,6 +74,6 @@ Keycloak UI:
   kubectl -n $KEYCLOAK_NAMESPACE port-forward svc/$KEYCLOAK_NAME-service 8443:8443
 
 Initial admin credentials:
-  kubectl -n $KEYCLOAK_NAMESPACE get secret $KEYCLOAK_NAME-initial-admin -o jsonpath='{.data.username}' | base64 -d
-  kubectl -n $KEYCLOAK_NAMESPACE get secret $KEYCLOAK_NAME-initial-admin -o jsonpath='{.data.password}' | base64 -d
+  username: admin
+  password: admin
 EOF

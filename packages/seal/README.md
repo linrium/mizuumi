@@ -29,6 +29,8 @@ keycloak instance:  keycloak
 hostname:           keycloak.localhost
 database:           PostgreSQL 15
 storage:            1Gi PostgreSQL data PVC
+admin username:     admin
+admin password:     admin
 ```
 
 Override the operator version or namespace with environment variables:
@@ -66,16 +68,17 @@ require accepting the certificate warning.
 
 ## Admin Credentials
 
-The Keycloak Operator generates the initial admin credentials in a Kubernetes
-secret named after the Keycloak CR:
+The local development install bootstraps Keycloak with fixed initial admin
+credentials:
 
-```sh
-kubectl -n keycloak get secret keycloak-initial-admin -o jsonpath='{.data.username}' | base64 -d
-kubectl -n keycloak get secret keycloak-initial-admin -o jsonpath='{.data.password}' | base64 -d
+```text
+username: admin
+password: admin
 ```
 
-Change the default admin credentials before using this beyond local
-development.
+These credentials come from `manifests/admin.yaml` and are only honored before
+the Keycloak master realm exists. For an existing database, change the password
+from the admin console or reset the development database.
 
 ## Uninstall
 
