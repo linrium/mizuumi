@@ -1,0 +1,5 @@
+# Kaniop Helm values for the local Seal identity deployment.
+#
+# The chart defaults are sufficient for this package. Keep this file checked in
+# so install-time overrides have the same shape as other packages.
+{}

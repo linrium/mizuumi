@@ -1,0 +1,18 @@
+apiVersion: kaniop.rs/v1beta1
+kind: Kanidm
+metadata:
+  name: my-idm
+spec:
+  domain: my-idm.localhost
+  origin: https://my-idm.localhost:8443
+  storage:
+    volumeClaimTemplate:
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+  replicaGroups:
+    - name: default
+      replicas: 1
