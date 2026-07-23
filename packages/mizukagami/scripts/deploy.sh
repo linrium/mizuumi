@@ -5,8 +5,17 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 APP_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 
 IMAGE_NAME=${IMAGE_NAME:-mizukagami:local-$(date +%Y%m%d%H%M%S)}
-CONTEXT=${KUBE_CONTEXT:-docker-desktop}
+CONTEXT=${KUBE_CONTEXT:-kind-node1}
 NAMESPACE=${NAMESPACE:-mizukagami}
+
+if [ -n "${KIND_CLUSTER_NAME:-}" ]; then
+  CLUSTER_NAME=$KIND_CLUSTER_NAME
+else
+  case "$CONTEXT" in
+    kind-*) CLUSTER_NAME=${CONTEXT#kind-} ;;
+    *) echo "Set KIND_CLUSTER_NAME when deploying to non-kind context '$CONTEXT'." >&2; exit 1 ;;
+  esac
+fi
 
 current_context=$(kubectl config current-context)
 if [ "$current_context" != "$CONTEXT" ]; then
@@ -18,11 +27,15 @@ fi
 echo "Building $IMAGE_NAME"
 docker build -t "$IMAGE_NAME" "$APP_DIR"
 
+echo "Loading $IMAGE_NAME into kind cluster $CLUSTER_NAME"
+kind load docker-image "$IMAGE_NAME" --name "$CLUSTER_NAME"
+
 echo "Applying Kubernetes manifests to context $CONTEXT"
 kubectl apply -k "$APP_DIR/k8s"
 
 echo "Updating deployment image to $IMAGE_NAME"
-kubectl -n "$NAMESPACE" set image deployment/mizukagami mizukagami="$IMAGE_NAME"
+kubectl -n "$NAMESPACE" patch deployment/mizukagami --type=strategic \
+  -p="{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"mizukagami\",\"image\":\"$IMAGE_NAME\",\"imagePullPolicy\":\"IfNotPresent\"}]}}}}"
 
 echo "Waiting for rollout"
 kubectl -n "$NAMESPACE" rollout status deployment/mizukagami
