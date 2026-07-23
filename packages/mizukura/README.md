@@ -104,6 +104,53 @@ port-forward to the RustFS API if `http://127.0.0.1:9000` is not already
 reachable, calls `PutBucketEncryption`, and verifies with
 `GetBucketEncryption`.
 
+## Keycloak OIDC Login
+
+After Seal identity is installed, configure RustFS to use the local Keycloak
+instance for OIDC login:
+
+```sh
+scripts/configure-keycloak-oidc.sh
+```
+
+The script creates or updates a confidential Keycloak client named `rustfs`,
+stores the client secret and Keycloak TLS certificate in
+`secret/rustfs-oidc-keycloak`, and upgrades the RustFS Helm release with
+`RUSTFS_IDENTITY_OPENID_*` environment variables. It also mounts the self-signed
+Keycloak certificate into the RustFS pod and sets `SSL_CERT_FILE` so in-cluster
+OIDC discovery can verify the local Keycloak issuer.
+
+By default, OIDC logins receive the RustFS `consoleAdmin` role policy for local
+development. Override it when you want stricter policy mapping:
+
+```sh
+RUSTFS_OIDC_ROLE_POLICY=readonly scripts/configure-keycloak-oidc.sh
+```
+
+Useful overrides:
+
+```sh
+KEYCLOAK_REALM=master
+KEYCLOAK_OIDC_CLIENT_ID=rustfs
+KEYCLOAK_OIDC_CLIENT_SECRET=...
+RUSTFS_PUBLIC_URL=http://127.0.0.1:9001
+RUSTFS_OIDC_DISPLAY_NAME=Keycloak
+RUSTFS_OIDC_ROLE_POLICY=consoleAdmin
+```
+
+Before using browser login, forward RustFS and Keycloak:
+
+```sh
+kubectl -n mizukura port-forward svc/rustfs-svc 9001:9001
+kubectl -n keycloak port-forward svc/keycloak-service 8443:8443
+```
+
+Add the Keycloak local hostname to `/etc/hosts` if needed:
+
+```text
+127.0.0.1 keycloak-service.keycloak.svc.cluster.local
+```
+
 ## Access
 
 Forward the S3 API:
