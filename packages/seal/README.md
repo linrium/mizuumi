@@ -26,7 +26,7 @@ operator version:   26.7.0
 operator namespace: keycloak
 keycloak namespace: keycloak
 keycloak instance:  keycloak
-hostname:           keycloak.localhost
+hostname:           keycloak-service.keycloak.svc.cluster.local
 database:           PostgreSQL 15
 storage:            1Gi PostgreSQL data PVC
 admin username:     admin
@@ -54,13 +54,13 @@ Forward the Keycloak UI:
 kubectl -n keycloak port-forward svc/keycloak-service 8443:8443
 ```
 
-Then open `https://keycloak.localhost:8443`.
+Then open `https://keycloak-service.keycloak.svc.cluster.local:8443`.
 
-If `keycloak.localhost` does not resolve on your machine, add it to
-`/etc/hosts`:
+For browser access through port-forwarding, add the Kubernetes service hostname
+to `/etc/hosts`:
 
 ```text
-127.0.0.1 keycloak.localhost
+127.0.0.1 keycloak-service.keycloak.svc.cluster.local
 ```
 
 The local certificate is self-signed, so local browser and CLI clients may

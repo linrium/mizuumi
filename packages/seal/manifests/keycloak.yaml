@@ -20,6 +20,6 @@ spec:
   http:
     tlsSecret: keycloak-tls
   hostname:
-    hostname: keycloak.localhost
+    hostname: keycloak-service.keycloak.svc.cluster.local
   ingress:
     enabled: false

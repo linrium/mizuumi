@@ -50,6 +50,50 @@ VAULT_ADDR=http://127.0.0.1:8200
 
 Then open `http://127.0.0.1:8200` for the UI.
 
+## Keycloak OIDC Login
+
+Configure Vault to use the local Keycloak instance for OIDC login:
+
+```sh
+VAULT_TOKEN=... scripts/configure-keycloak-oidc.sh
+```
+
+The script creates or updates a confidential Keycloak client named `vault`,
+enables Vault's `oidc` auth method, and maps OIDC logins to a local development
+Vault admin policy.
+
+Before using the browser login, forward Vault and Keycloak:
+
+```sh
+kubectl -n vault port-forward svc/vault 8200:8200
+kubectl -n keycloak port-forward svc/keycloak-service 8443:8443
+```
+
+Add the Keycloak local hostname to `/etc/hosts` if needed:
+
+```text
+127.0.0.1 keycloak-service.keycloak.svc.cluster.local
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8200/ui/vault/auth?with=oidc
+```
+
+Use the local Keycloak credentials:
+
+```text
+username: admin
+password: admin
+```
+
+CLI login also works:
+
+```sh
+VAULT_ADDR=http://127.0.0.1:8200 vault login -method=oidc role=keycloak
+```
+
 ## Initialize
 
 Vault must be initialized once after the first install:
