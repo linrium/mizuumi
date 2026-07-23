@@ -71,7 +71,7 @@ RustFS with non-default credentials, update both the `mizukura/rustfs-auth`
 secret and the `mizukagami/rustfs-auth` secret.
 
 The default mirrored credentials are `admin/adminadmin`. The secret key is at
-least eight characters so common S3 clients such as `mc` accept it.
+least eight characters so common S3 clients such as the RustFS CLI accept it.
 
 For Docker Desktop Kubernetes, use the local deploy script:
 

@@ -4,9 +4,10 @@ set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 APP_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 
-IMAGE_NAME=${IMAGE_NAME:-mizukagami:local-$(date +%Y%m%d%H%M%S)}
+IMAGE_NAME=${IMAGE_NAME:-mizukagami:latest}
 CONTEXT=${KUBE_CONTEXT:-kind-node1}
 NAMESPACE=${NAMESPACE:-mizukagami}
+DEPLOYED_AT=$(date +%Y%m%d%H%M%S)
 
 if [ -n "${KIND_CLUSTER_NAME:-}" ]; then
   CLUSTER_NAME=$KIND_CLUSTER_NAME
@@ -32,10 +33,6 @@ kind load docker-image "$IMAGE_NAME" --name "$CLUSTER_NAME"
 
 echo "Applying Kubernetes manifests to context $CONTEXT"
 kubectl apply -k "$APP_DIR/k8s"
-
-echo "Updating deployment image to $IMAGE_NAME"
-kubectl -n "$NAMESPACE" patch deployment/mizukagami --type=strategic \
-  -p="{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"mizukagami\",\"image\":\"$IMAGE_NAME\",\"imagePullPolicy\":\"IfNotPresent\"}]}}}}"
 
 echo "Waiting for rollout"
 kubectl -n "$NAMESPACE" rollout status deployment/mizukagami
