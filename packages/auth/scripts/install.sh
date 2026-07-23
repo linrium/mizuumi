@@ -4,35 +4,23 @@ set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 APP_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 
-KEYCLOAK_VERSION=${KEYCLOAK_VERSION:-26.7.0}
-KEYCLOAK_NAMESPACE=${KEYCLOAK_NAMESPACE:-keycloak}
+KEYCLOAK_NAMESPACE=auth
 KEYCLOAK_NAME=keycloak
 KEYCLOAK_HOSTNAME=keycloak-service.keycloak.svc.cluster.local
 TLS_DAYS=${TLS_DAYS:-3650}
 TLS_CERT_FILE=""
 TLS_KEY_FILE=""
-KUSTOMIZE_DIR=""
 
 cleanup() {
   [ -z "$TLS_CERT_FILE" ] || rm -f "$TLS_CERT_FILE"
   [ -z "$TLS_KEY_FILE" ] || rm -f "$TLS_KEY_FILE"
-  [ -z "$KUSTOMIZE_DIR" ] || rm -rf "$KUSTOMIZE_DIR"
 }
 
 trap cleanup EXIT INT TERM
 
 kubectl create namespace "$KEYCLOAK_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 
-KUSTOMIZE_DIR=$(mktemp -d)
-cat >"$KUSTOMIZE_DIR/kustomization.yaml" <<EOF
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-namespace: $KEYCLOAK_NAMESPACE
-resources:
-  - github.com/keycloak/keycloak-k8s-resources/kubernetes?ref=$KEYCLOAK_VERSION
-EOF
-
-kubectl apply -k "$KUSTOMIZE_DIR"
+kubectl apply -k "$APP_DIR/manifests"
 
 kubectl -n "$KEYCLOAK_NAMESPACE" wait \
   --for=condition=available deployment/keycloak-operator \

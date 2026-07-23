@@ -33,17 +33,18 @@ admin username:     admin
 admin password:     admin
 ```
 
-Override the operator version or namespace with environment variables:
+The operator version is pinned in `manifests/kustomization.yaml`.
 
-```sh
-KEYCLOAK_VERSION=26.7.0 KEYCLOAK_NAMESPACE=keycloak scripts/install.sh
+```yaml
+resources:
+  - github.com/keycloak/keycloak-k8s-resources/kubernetes?ref=26.7.0
 ```
 
 The operator install follows the upstream Kubernetes kustomization documented by
 Keycloak:
 
 ```sh
-kubectl apply -k 'github.com/keycloak/keycloak-k8s-resources/kubernetes?ref=26.7.0'
+kubectl apply -k manifests
 ```
 
 ## Access
@@ -85,20 +86,20 @@ from the admin console or reset the development database.
 Remove the Auth identity resources:
 
 ```sh
-kubectl -n keycloak delete -f manifests/keycloak.yaml
-kubectl -n keycloak delete -f manifests/postgres.yaml
-kubectl -n keycloak delete secret keycloak-tls
+scripts/uninstall.sh
 ```
 
-Remove the operator:
+The script removes the Keycloak instance, local PostgreSQL resources, bootstrap
+secrets, TLS secret, and operator. PVCs are preserved by default so local
+identity data is not deleted accidentally. Delete the development database PVC
+too with:
 
 ```sh
-kubectl -n keycloak delete -k 'github.com/keycloak/keycloak-k8s-resources/kubernetes?ref=26.7.0'
+DELETE_DATA=true scripts/uninstall.sh
 ```
 
-PVCs may remain depending on the Kubernetes storage policy. Check them before
-deleting if the identity data matters:
+Delete the namespace too with:
 
 ```sh
-kubectl -n keycloak get pvc
+DELETE_NAMESPACE=true scripts/uninstall.sh
 ```
