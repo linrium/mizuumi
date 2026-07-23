@@ -1,16 +1,14 @@
 # Seal
 
-This package installs Kanidm into Kubernetes with the Kaniop operator and
-creates the local identity resources used by Seal.
+This package installs Keycloak into Kubernetes with the Keycloak Operator and a
+local PostgreSQL database for Seal identity development.
 
-The checked-in manifests use the Kaniop quickstart topology: one Kanidm
-write-replica named `my-idm` in the `default` namespace, using the quickstart
-TLS secret. This is suitable for local development. It is not a production
-identity topology.
+The checked-in manifests use a single Keycloak instance named `keycloak` in the
+`keycloak` namespace. The setup is suitable for local development. It is not a
+production identity topology.
 
-Kanidm data is stored on a `1Gi` persistent volume claim. Without persistent
-storage, Kanidm resets on pod restart and the generated Kaniop admin secret can
-become stale.
+Keycloak data is stored in PostgreSQL on a `1Gi` persistent volume claim.
+Without persistent storage, Keycloak state resets on pod restart.
 
 ## Install
 
@@ -23,97 +21,81 @@ scripts/install.sh
 The script installs:
 
 ```text
-operator release:  kaniop
-operator namespace: kaniop
-chart:             oci://ghcr.io/pando85/helm-charts/kaniop
-kanidm namespace:  default
-kanidm cluster:    my-idm
-storage:           1Gi data PVC
-person account:    linh / linh@example.com
-service account:   seal / seal@example.com
-service token:     seal-kanidm-api-token
-service password:  seal-kanidm-service-account-credentials
+operator:           Keycloak Operator
+operator version:   26.7.0
+operator namespace: keycloak
+keycloak namespace: keycloak
+keycloak instance:  keycloak
+hostname:           keycloak.localhost
+database:           PostgreSQL 15
+storage:            1Gi PostgreSQL data PVC
 ```
 
-Override defaults with environment variables:
+Override the operator version or namespace with environment variables:
 
 ```sh
-RELEASE=kaniop NAMESPACE=kaniop KANIDM_NAMESPACE=default scripts/install.sh
+KEYCLOAK_VERSION=26.7.0 KEYCLOAK_NAMESPACE=keycloak scripts/install.sh
+```
+
+The operator install follows the upstream Kubernetes kustomization documented by
+Keycloak:
+
+```sh
+kubectl apply -k 'github.com/keycloak/keycloak-k8s-resources/kubernetes?ref=26.7.0'
 ```
 
 ## Access
 
-Forward the Kanidm UI:
+Forward the Keycloak UI:
 
 ```sh
-kubectl -n default port-forward svc/my-idm 8443:8443
+kubectl -n keycloak port-forward svc/keycloak-service 8443:8443
 ```
 
-Then open `https://127.0.0.1:8443` or `https://localhost:8443`.
+Then open `https://keycloak.localhost:8443`.
 
-For credential setup and passkeys, use `https://my-idm.localhost:8443`. The
-Kanidm origin is configured to that URL because passkeys require the browser
-origin to match Kanidm's configured WebAuthn origin.
-
-If `my-idm.localhost` does not resolve on your machine, add it to `/etc/hosts`:
+If `keycloak.localhost` does not resolve on your machine, add it to
+`/etc/hosts`:
 
 ```text
-127.0.0.1 my-idm.localhost
+127.0.0.1 keycloak.localhost
 ```
 
-The quickstart certificate is self-signed, so local browser and CLI clients may
+The local certificate is self-signed, so local browser and CLI clients may
 require accepting the certificate warning.
 
-## Accounts
+## Admin Credentials
 
-The person account is intentionally created without credentials:
-
-```text
-username: linh
-email:    linh@example.com
-```
-
-Kaniop publishes a short-lived credential reset link as an event when the
-account is created:
+The Keycloak Operator generates the initial admin credentials in a Kubernetes
+secret named after the Keycloak CR:
 
 ```sh
-kubectl -n default describe kanidmpersonaccount linh
+kubectl -n keycloak get secret keycloak-initial-admin -o jsonpath='{.data.username}' | base64 -d
+kubectl -n keycloak get secret keycloak-initial-admin -o jsonpath='{.data.password}' | base64 -d
 ```
 
-The reset event prints a URL without the local forwarded port. When using
-port-forwarding, open the same token at:
-
-```text
-https://my-idm.localhost:8443/ui/reset?token=<token>
-```
-
-The Seal service account has generated credentials and a read-only API token.
-Read them from Kubernetes secrets:
-
-```sh
-kubectl -n default get secret seal-kanidm-service-account-credentials -o jsonpath='{.data.password}' | base64 -d
-kubectl -n default get secret seal-kanidm-api-token -o jsonpath='{.data.token}' | base64 -d
-```
+Change the default admin credentials before using this beyond local
+development.
 
 ## Uninstall
 
-Remove the Seal identity resources and Kanidm cluster:
+Remove the Seal identity resources:
 
 ```sh
-kubectl -n default delete -f manifests/accounts.yaml
-kubectl -n default delete -f manifests/kanidm.yaml
-kubectl -n default delete secret my-idm-tls
+kubectl -n keycloak delete -f manifests/keycloak.yaml
+kubectl -n keycloak delete -f manifests/postgres.yaml
+kubectl -n keycloak delete secret keycloak-tls
 ```
 
 Remove the operator:
 
 ```sh
-helm uninstall kaniop -n kaniop
+kubectl -n keycloak delete -k 'github.com/keycloak/keycloak-k8s-resources/kubernetes?ref=26.7.0'
 ```
 
 PVCs may remain depending on the Kubernetes storage policy. Check them before
 deleting if the identity data matters:
 
 ```sh
-kubectl -n default get pvc
+kubectl -n keycloak get pvc
 ```

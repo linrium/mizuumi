@@ -17,11 +17,11 @@ VAULT_SERVICE=${VAULT_SERVICE:-vault}
 VAULT_LOCAL_PORT=${VAULT_LOCAL_PORT:-8200}
 VAULT_SERVICE_PORT=${VAULT_SERVICE_PORT:-8200}
 
-KANIDM_NAMESPACE=${KANIDM_NAMESPACE:-default}
-KANIDM_SERVICE=${KANIDM_SERVICE:-my-idm}
-KANIDM_LOCAL_PORT=${KANIDM_LOCAL_PORT:-8443}
-KANIDM_SERVICE_PORT=${KANIDM_SERVICE_PORT:-8443}
-KANIDM_LOCAL_HOST=${KANIDM_LOCAL_HOST:-my-idm.localhost}
+KEYCLOAK_NAMESPACE=${KEYCLOAK_NAMESPACE:-keycloak}
+KEYCLOAK_SERVICE=${KEYCLOAK_SERVICE:-keycloak-service}
+KEYCLOAK_LOCAL_PORT=${KEYCLOAK_LOCAL_PORT:-8443}
+KEYCLOAK_SERVICE_PORT=${KEYCLOAK_SERVICE_PORT:-8443}
+KEYCLOAK_LOCAL_HOST=${KEYCLOAK_LOCAL_HOST:-keycloak.localhost}
 
 pids=""
 
@@ -50,18 +50,18 @@ kubectl -n "$VAULT_NAMESPACE" port-forward "svc/$VAULT_SERVICE" \
   "$VAULT_LOCAL_PORT:$VAULT_SERVICE_PORT" &
 pids="$pids $!"
 
-if ! dscacheutil -q host -a name "$KANIDM_LOCAL_HOST" >/dev/null 2>&1; then
+if ! dscacheutil -q host -a name "$KEYCLOAK_LOCAL_HOST" >/dev/null 2>&1; then
   cat <<EOF
-Warning: $KANIDM_LOCAL_HOST does not resolve locally.
-Add this to /etc/hosts before using Kanidm passkeys:
-  127.0.0.1 $KANIDM_LOCAL_HOST
+Warning: $KEYCLOAK_LOCAL_HOST does not resolve locally.
+Add this to /etc/hosts before using Keycloak:
+  127.0.0.1 $KEYCLOAK_LOCAL_HOST
 
 EOF
 fi
 
-echo "Forwarding kanidm:           $KANIDM_LOCAL_HOST:$KANIDM_LOCAL_PORT -> svc/$KANIDM_SERVICE:$KANIDM_SERVICE_PORT"
-kubectl -n "$KANIDM_NAMESPACE" port-forward "svc/$KANIDM_SERVICE" \
-  "$KANIDM_LOCAL_PORT:$KANIDM_SERVICE_PORT" &
+echo "Forwarding keycloak:         $KEYCLOAK_LOCAL_HOST:$KEYCLOAK_LOCAL_PORT -> svc/$KEYCLOAK_SERVICE:$KEYCLOAK_SERVICE_PORT"
+kubectl -n "$KEYCLOAK_NAMESPACE" port-forward "svc/$KEYCLOAK_SERVICE" \
+  "$KEYCLOAK_LOCAL_PORT:$KEYCLOAK_SERVICE_PORT" &
 pids="$pids $!"
 
 wait
